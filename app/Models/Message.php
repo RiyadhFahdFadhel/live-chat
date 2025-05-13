@@ -10,6 +10,10 @@ class Message extends Model
 {
     use HasFactory, SoftDeletes;
 
+    protected $casts = [
+        'read_at' => 'datetime',
+    ];
+
     //
     protected $fillable = ['sender_id', 'receiver_id', 'message'];
 

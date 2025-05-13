@@ -17,6 +17,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'auth:sanctum' => \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             'recent.login' => \App\Http\Middleware\EnsureRecentLogin::class,
+            'single-tab' => \App\Http\Middleware\EnsureSingleTabSession::class,
+
 
         ]);
 

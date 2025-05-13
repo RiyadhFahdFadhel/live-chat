@@ -23,6 +23,7 @@ Route::middleware(['auth', 'recent.login'])->group(function (){
     Route::post('/chat/update/{id}', [ChatController::class, 'update']);
     Route::post('/chat/destroy/{id}', [ChatController::class, 'destroy']);
     Route::post('/chat/typing', [ChatController::class, 'typing']);
+    Route::post('/chat/markAsRead/{id}', [ChatController::class, 'markAsRead']);
     Route::post('/online', [ChatController::class, 'setOnline']);
     Route::post('/offline', [ChatController::class, 'setOffline']);
 });

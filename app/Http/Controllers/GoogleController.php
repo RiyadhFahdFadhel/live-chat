@@ -14,7 +14,7 @@ class GoogleController extends Controller
     {
         
         // return Socialite::driver('google')->stateless()->redirect();
-        return Socialite::driver('google')->redirect(); // ✅ no stateless here
+        return Socialite::driver('google')->redirect(); 
 
     }
 
@@ -31,13 +31,20 @@ class GoogleController extends Controller
                 'email' => $googleUser->getEmail(),
                 'google_id' => $googleUser->getId(),
                 'avatar' => $googleUser->getAvatar(),
-                'password' => bcrypt(uniqid()), // Optional placeholder password
+
+                // Optional placeholder password
+                'password' => bcrypt(uniqid()), 
                 
                 ]
             );
 
-        Auth::login($user);
-        session(['recent_login' => true]); // ✅ flag that this is a valid, intentional login
+            // flag that this is a valid, intentional login
+            
+            Auth::login($user);
+            session(['recent_login' => true]); 
+//         $user->current_tab_id = request()->header('X-Tab-ID');
+// $user->save();
+
 
 
         $token = $user->createToken('google-login')->plainTextToken;

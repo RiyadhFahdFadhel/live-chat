@@ -8,8 +8,10 @@ use App\Events\MessageSent;
 use App\Events\UserTyping;
 use App\Models\Message;
 use App\Models\User;
-use Illuminate\Support\Facades\Log; // ✅ ADD THIS LINE
+use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
+use App\Events\MessageRead;
+
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 
@@ -17,7 +19,7 @@ class ChatController extends Controller
 {
     public function index()
     {
-        $users = User::where('id', '!=', Auth::id())->get();
+        $users = User::where('id', '!=', Auth::id())->get(); //  Exclude self
         return view('users', compact('users'));
     }
 
@@ -29,12 +31,18 @@ class ChatController extends Controller
             abort(403, "You can't chat with yourself.");
         }
 
+
+        //  Clean dual-query using OR and order
+
         $messages = Message::where(function ($query) use ($receiverId) {
             $query->where('sender_id', Auth::id())->where('receiver_id', $receiverId);
         })->orWhere(function ($query) use ($receiverId) {
             $query->where('sender_id', $receiverId)->where('receiver_id', Auth::id());
         })
-            ->whereNull('deleted_at') // 👈 Only non-deleted messages
+
+            //  Only non-deleted messages
+            ->whereNull('deleted_at')
+
             ->orderBy('created_at')->get();
 
         return view('chat', compact('receiver', 'messages'));
@@ -43,8 +51,9 @@ class ChatController extends Controller
     public function sendMessage(Request $request, $receiverId)
     {
         $request->validate([
-            'message' => 'required|string|max:1000'
+            'message' => 'required|string|max:1000' //  Basic input validation
         ]);
+
         // save message to DB
         $message = Message::create([
             'sender_id' => Auth::id(),
@@ -67,6 +76,7 @@ class ChatController extends Controller
 
     public function setOnline()
     {
+        //  Caching for online status
         Cache::put('user-is-online-' . Auth::id(), true, now()->addMinutes(5));
         return response()->json(['status' => 'Online']);
     }
@@ -86,6 +96,7 @@ class ChatController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
+        // Soft delete assumed
         $messageId = $message->id;
         $message->delete();
 
@@ -129,6 +140,26 @@ class ChatController extends Controller
 
 
         return response()->json(['message' => $message]);
+    }
+
+    public function markAsRead(Request $request, $id)
+    {
+        $message = Message::findOrFail($id);
+
+        // Only receiver can mark message as read
+        // if ($message->receiver_id !== Auth::id()) {
+        //     return response()->json(['error' => 'Unauthorized'], 403);
+        // }
+
+        $message->read_at = now();
+        $message->save();
+
+        $message->refresh(); // ⬅️ Important!
+
+
+        broadcast(new MessageRead($message))->toOthers();
+
+        return response()->json(['status' => 'Read']);
     }
 
 
