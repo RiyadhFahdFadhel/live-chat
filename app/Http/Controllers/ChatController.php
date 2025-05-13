@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\MessageDeleted;
+use App\Events\MessageEdited;
 use App\Events\MessageSent;
 use App\Events\UserTyping;
 use App\Models\Message;
 use App\Models\User;
+use Illuminate\Support\Facades\Log; // ✅ ADD THIS LINE
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -22,27 +25,37 @@ class ChatController extends Controller
     {
         $receiver = User::find($receiverId);
 
-        $messages = Message::where(function ($query) use ($receiverId){
+        if ($receiverId == Auth::id()) {
+            abort(403, "You can't chat with yourself.");
+        }
+
+        $messages = Message::where(function ($query) use ($receiverId) {
             $query->where('sender_id', Auth::id())->where('receiver_id', $receiverId);
         })->orWhere(function ($query) use ($receiverId) {
             $query->where('sender_id', $receiverId)->where('receiver_id', Auth::id());
-        })->get();
+        })
+        ->whereNull('deleted_at') // 👈 Only non-deleted messages
+        ->get();
+
 
         return view('chat', compact('receiver', 'messages'));
     }
 
     public function sendMessage(Request $request, $receiverId)
     {
+        $request->validate([
+            'message' => 'required|string|max:1000'
+        ]);
         // save message to DB
         $message = Message::create([
-            'sender_id'     => Auth::id(),
-            'receiver_id'   => $receiverId,
-            'message'       => $request['message']
+            'sender_id' => Auth::id(),
+            'receiver_id' => $receiverId,
+            'message' => $request['message']
         ]);
-        
+
         // Fire the message event
         broadcast(new MessageSent($message))->toOthers();
-        
+
         return response()->json(['status' => 'Message sent!']);
     }
 
@@ -64,5 +77,51 @@ class ChatController extends Controller
         Cache::forget('user-is-online-' . Auth::id());
         return response()->json(['status' => 'Offline']);
     }
+
+
+    public function destroy($id)
+    {
+        $message = Message::findOrFail($id);
+
+        if ($message->sender_id !== Auth::id()) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $message->delete();
+
+        broadcast(new MessageDeleted($message->id))->toOthers();
+
+        return response()->json(['status' => 'Message deleted']);
+    }
+
+    public function update(Request $request, $id)
+{
+    Log::info('Edit message debug', [
+        'auth_id' => Auth::id(),
+        'sender_id' => Message::find($id)?->sender_id,
+        'message_id' => $id
+    ]);
+    $request->validate([
+        'message' => 'required|string|max:1000'
+    ]);
+    
+    $message = Message::findOrFail($id)->first();
+  
+
+
+    // if ($message->sender_id !== Auth::id()) {
+    //     return response()->json(['error' => 'Unauthorized'], 403);
+    // }
+
+    $message->update(['message' => $request->message]);
+
+    broadcast(new MessageEdited($message))->toOthers();
+    Log::info('Broadcasting edit', ['channel' => 'chat.' . $message->receiver_id]);
+
+
+    return response()->json(['message' => $message]);
+}
+
+
 
 }

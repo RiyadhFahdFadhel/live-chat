@@ -12,6 +12,7 @@ class GoogleController extends Controller
 {
     public function redirectToGoogle()
     {
+        
         // return Socialite::driver('google')->stateless()->redirect();
         return Socialite::driver('google')->redirect(); // ✅ no stateless here
 
@@ -36,8 +37,18 @@ class GoogleController extends Controller
             );
 
         Auth::login($user);
+        session(['recent_login' => true]); // ✅ flag that this is a valid, intentional login
 
-        return redirect('/users');
+
+        $token = $user->createToken('google-login')->plainTextToken;
+
+        // return response()->json([
+        //     'user' => $user,
+        //     'token' => $token
+        // ]);
+
+
+         return redirect()->route('users')->with('token', $token);
 
     }
 }
