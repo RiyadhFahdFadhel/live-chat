@@ -34,9 +34,8 @@ class ChatController extends Controller
         })->orWhere(function ($query) use ($receiverId) {
             $query->where('sender_id', $receiverId)->where('receiver_id', Auth::id());
         })
-        ->whereNull('deleted_at') // 👈 Only non-deleted messages
-        ->get();
-
+            ->whereNull('deleted_at') // 👈 Only non-deleted messages
+            ->orderBy('created_at')->get();
 
         return view('chat', compact('receiver', 'messages'));
     }
@@ -87,40 +86,50 @@ class ChatController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
+        $messageId = $message->id;
         $message->delete();
 
-        broadcast(new MessageDeleted($message->id))->toOthers();
-
-        return response()->json(['status' => 'Message deleted']);
+        try {
+            broadcast(new MessageDeleted($message))->toOthers();
+        } catch (\Throwable $e) {
+            Log::error('Broadcast delete failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
+        return response()->json(['message_id' => $messageId]);
     }
 
     public function update(Request $request, $id)
-{
-    Log::info('Edit message debug', [
-        'auth_id' => Auth::id(),
-        'sender_id' => Message::find($id)?->sender_id,
-        'message_id' => $id
-    ]);
-    $request->validate([
-        'message' => 'required|string|max:1000'
-    ]);
-    
-    $message = Message::findOrFail($id)->first();
-  
+    {
+        Log::info('Edit message debug', [
+            'auth_id' => Auth::id(),
+            'sender_id' => Message::find($id)?->sender_id,
+            'message_id' => $id
+        ]);
+        $message = Message::findOrFail($id);
+
+        $request->validate([
+            'message' => 'required|string|max:1000'
+        ]);
 
 
-    // if ($message->sender_id !== Auth::id()) {
-    //     return response()->json(['error' => 'Unauthorized'], 403);
-    // }
+        // if ($message->sender_id !== Auth::id()) {
+        //     return response()->json(['error' => 'Unauthorized'], 403);
+        // }
 
-    $message->update(['message' => $request->message]);
+        $message->message = $request->message;
+        $message->save();
 
-    broadcast(new MessageEdited($message))->toOthers();
-    Log::info('Broadcasting edit', ['channel' => 'chat.' . $message->receiver_id]);
+        $message->refresh(); // ⬅️ Important!
 
 
-    return response()->json(['message' => $message]);
-}
+        broadcast(new MessageEdited($message))->toOthers();
+        Log::info('Broadcasting edit', ['channel' => 'chat.' . $message->receiver_id]);
+
+
+        return response()->json(['message' => $message]);
+    }
 
 
 

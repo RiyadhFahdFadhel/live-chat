@@ -202,6 +202,26 @@
             }
 
         }
+
+        .action-button {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            margin-left: 5px;
+            transition: background 0.3s ease, transform 0.2s ease;
+        }
+
+        .action-button:hover {
+            background: var(--secondary-color);
+            transform: translateY(-1px);
+        }
     </style>
     @vite(['resources/js/app.js'])
 </head>
@@ -238,8 +258,12 @@
                     </span>
 
                     @if($message->sender_id == auth()->id())
-                        <button onclick="editMessage({{ $message->id }})" class="edit-btn">✏️</button>
-                        <button onclick="deleteMessage({{ $message->id }})" class="delete-btn">🗑️</button>
+                        <button class="action-button edit-btn" data-id="{{ $message->id }}" aria-label="Edit">
+                            <i class="fas fa-pen"></i>
+                        </button>
+                        <button class="action-button delete-btn" data-id="{{ $message->id }}" aria-label="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
                     @endif
                 </div>
             @endforeach
@@ -285,28 +309,56 @@
             // subscribe to chat channel
             window.Echo.private('chat.' + senderId)
                 .listen('MessageSent', (e) => {
-                    // show the received message
+                    const isOwn = e.message.sender_id === senderId;
                     const messageDiv = document.createElement('div');
-                    messageDiv.className = 'message received';
+                    messageDiv.className = 'message ' + (isOwn ? 'sent' : 'received');
+                    messageDiv.id = 'msg-' + e.message.id;
+
                     const now = new Date();
-                    const timeString = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+                    const timeString = now.toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                    });
+
                     messageDiv.innerHTML = `
-                                ${e.message.message}
-                                <span class="message-time">${timeString} <i class="fas fa-check-double ms-1"></i></span>
-                            `;
+        <span class="message-text">${e.message.message}</span>
+        <span class="message-time">${timeString} ${isOwn ? '<i class="fas fa-check-double ms-1"></i>' : ''}</span>
+        ${isOwn ? `
+            <button class="action-button edit-btn" data-id="${e.message.id}" aria-label="Edit">
+                <i class="fas fa-pen"></i>
+            </button>
+            <button class="action-button delete-btn" data-id="${e.message.id}" aria-label="Delete">
+                <i class="fas fa-trash"></i>
+            </button>
+        ` : ''}
+    `;
+
                     chatBox.appendChild(messageDiv);
                     chatBox.scrollTop = chatBox.scrollHeight;
                 })
+
+
+                // the user can delete his own messages
                 .listen('MessageEdited', (e) => {
-                    const el = document.querySelector(`#msg-${e.message.id} .message-text`);
-                    if (el) el.textContent = e.message.message;
+                    const el = document.querySelector(`#msg-${e.id} .message-text`);
+                    console.log('[MessageEdited]', e);
+
+                    if (el) {
+                        el.textContent = e.message;
+
+                        // Optional: show "edited" indicator
+                        const time = el.nextElementSibling;
+                        if (time && !time.innerText.includes('(edited)')) {
+                            time.innerText += ' (edited)';
+                        }
+                    }
                 })
                 .listen('MessageDeleted', (e) => {
                     const el = document.getElementById(`msg-${e.message_id}`);
                     if (el) el.remove();
                 });
 
-            // the user can delete his own messages
 
 
 
@@ -333,20 +385,28 @@
                         },
                         body: JSON.stringify({ message })
                     });
+
                     const messageDiv = document.createElement('div');
                     messageDiv.className = 'message sent';
+                    messageDiv.id = 'msg-temp-' + Date.now(); // temporary ID
+
                     const now = new Date();
-                    const timeString = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+                    const timeString = now.toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                    });
+
                     messageDiv.innerHTML = `
-                        ${message}
-                        <span class="message-time">${timeString} <i class="fas fa-check-double ms-1"></i></span>
-                    `;
+            <span class="message-text">${message}</span>
+            <span class="message-time">${timeString} <i class="fas fa-check-double ms-1"></i></span>
+        `;
+
                     chatBox.appendChild(messageDiv);
                     chatBox.scrollTop = chatBox.scrollHeight;
                     messageInput.value = '';
                 }
             });
-
             let typingTimeOut;
             messageInput.addEventListener('input', function () {
                 clearTimeout(typingTimeOut);
@@ -366,47 +426,56 @@
         });
     </script>
     <script>
-        const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        document.addEventListener('DOMContentLoaded', function () {
+            // ... your existing code ...
 
+            const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
+            // ✅ Event delegation for edit/delete buttons
+            document.getElementById('chat-box').addEventListener('click', function (e) {
+                const btn = e.target.closest('button');
+                if (!btn || !btn.dataset.id) return;
 
-        function editMessage(id) {
-            const newText = prompt("Edit your message:");
-            if (!newText) return;
+                const id = btn.dataset.id;
 
-            console.log('Editing ID:', id);
-            fetch(`/chat/update/${id}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': csrf  // ✅ use the variable!
-                },
-                body: JSON.stringify({ message: newText })
-            })
-                .then(res => res.json())
-                .then(res => {
-                    const el = document.querySelector(`#msg-${id} .message-text`);
-                    if (el) el.textContent = res.message.message;
+                if (btn.classList.contains('delete-btn')) {
+                    if (!confirm("Delete this message?")) return;
 
-                })
-                .catch(err => alert('Could not edit message.'));
-        }
-
-        function deleteMessage(id) {
-            if (!confirm("Delete this message?")) return;
-
-            fetch(`/chat/destroy/${id}`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': csrf  // ✅ use the same token
+                    fetch(`/chat/destroy/${id}`, {
+                        method: 'POST',
+                        headers: { 'X-CSRF-TOKEN': csrf }
+                    })
+                        .then(() => {
+                            const el = document.getElementById(`msg-${id}`);
+                            if (el) el.remove();
+                        })
+                        .catch(() => alert('Could not delete message.'));
                 }
-            })
-                .then(() => {
-                    const el = document.getElementById(`msg-${id}`);
-                    if (el) el.remove();
-                })
-                .catch(err => alert('Could not delete message.'));
-        }
+
+                if (btn.classList.contains('edit-btn')) {
+                    const newText = prompt("Edit your message:");
+                    if (!newText) return;
+
+                    fetch(`/chat/update/${id}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrf
+                        },
+                        body: JSON.stringify({ message: newText })
+                    })
+                        .then(res => res.json())
+                        .then(res => {
+                            const el = document.querySelector(`#msg-${id} .message-text`);
+                            if (el) el.textContent = res.message.message;
+                        })
+                        .catch(() => alert('Could not edit message.'));
+                }
+            });
+
+            // ✅ remove the old global functions (optional cleanup)
+        });
+
     </script>
 </body>
 
