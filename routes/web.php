@@ -16,7 +16,7 @@ Route::get('auth/google/callback', [GoogleController::class, 'handleGoogleCallba
 // Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
 
 
-Route::middleware(['auth', 'recent.login'])->group(function (){
+Route::middleware(['auth'])->group(function (){
     Route::get('/users', [ChatController::class, 'index'])->name('users');
     Route::get('/chat/{receiverId}', [ChatController::class, 'chat'])->name('chat');
     Route::post('/chat/{receiverId}/send', [ChatController::class, 'sendMessage']);

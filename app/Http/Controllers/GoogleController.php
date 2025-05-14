@@ -41,7 +41,7 @@ class GoogleController extends Controller
             // flag that this is a valid, intentional login
             
             Auth::login($user);
-            session(['recent_login' => true]); 
+           // session(['recent_login' => true]); 
 //         $user->current_tab_id = request()->header('X-Tab-ID');
 // $user->save();
 

@@ -29,7 +29,8 @@ class MessageController extends Controller
             })
             ->withTrashed()
                ->latest()
-            ->paginate(10);
+            ->paginate(10)
+            ;
 
         return response()->json($messages);
     }

@@ -16,10 +16,10 @@ class EnsureRecentLogin
      */
     public function handle(Request $request, Closure $next): Response
     {
-            if (!session()->has('recent_login')) {
-                Auth::logout(); // Optional: force logout
-                return redirect()->route('login')->with('message', 'Please log in again.');
-            }
+            // if (!session()->has('recent_login')) {
+            //     Auth::logout(); // Optional: force logout
+            //     return redirect()->route('login')->with('message', 'Please log in again.');
+            // }
     
             return $next($request);
     }
