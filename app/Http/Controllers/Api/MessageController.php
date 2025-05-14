@@ -27,7 +27,8 @@ class MessageController extends Controller
                 $query->where('sender_id', $receiverId)
                       ->where('receiver_id', $userId);
             })
-            ->orderBy('created_at', 'desc')
+            ->withTrashed()
+               ->latest()
             ->paginate(10);
 
         return response()->json($messages);
